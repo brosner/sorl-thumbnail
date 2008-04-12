@@ -52,17 +52,21 @@ utils_tests = """
 # thumbnails_for_file()
 #===============================================================================
 
+>>> output = []
 >>> for thumb in thumbs['test.jpg']:
 ...     thumb['rel_fn'] = strip_media_root(thumb['filename'])
-...     print '%(x)sx%(y)s %(quality)s %(rel_fn)s' % thumb
-80x80 85 test-thumbnail-utils/test_jpg_80x80_q85.jpg
-80x80 95 test-thumbnail-utils/test_jpg_80x80_q95.jpg
+...     output.append('%(x)sx%(y)s %(quality)s %(rel_fn)s' % thumb)
+>>> output.sort()
+>>> output
+['80x80 85 test-thumbnail-utils/test_jpg_80x80_q85.jpg', '80x80 95 test-thumbnail-utils/test_jpg_80x80_q95.jpg']
 
 # Thumbnails for file
+>>> output = []
 >>> for thumb in thumbnails_for_file('test-thumbnail-utils/test.jpg'):
-...    print strip_media_root(thumb['filename'])
-test-thumbnail-utils/test_jpg_80x80_q85.jpg
-test-thumbnail-utils/test_jpg_80x80_q95.jpg
+...    output.append(strip_media_root(thumb['filename']))
+>>> output.sort()
+>>> output
+['test-thumbnail-utils/test_jpg_80x80_q85.jpg', 'test-thumbnail-utils/test_jpg_80x80_q95.jpg']
 
 # Thumbnails for file, with basedir setting
 >>> change_settings.change({'BASEDIR': 'test-thumbnail-basedir'})

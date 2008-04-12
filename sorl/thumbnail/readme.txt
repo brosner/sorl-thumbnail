@@ -47,30 +47,31 @@ other supported format), relative to``MEDIA_ROOT``.
       ``{% thumbnail source size_string %}``.
 
 ``options`` are optional (obviously) and should be comma separated (without a
-space between them - for example, ``crop,bw,quality=95``). Valid options are:
+space between them - for example, ``crop,bw,quality=95``). Unless you change
+the `thumbnail processors`_, valid options are:
 
-    ``quality=[1-100]``
+``quality=[1-100]``
       Alter the quality of the JPEG thumbnail (the default is 85).
 
-    ``crop``
+``crop``
       Crop the source image height or width to exactly match the requested
       thumbnail size (the default is to proportionally resize the source image
       to fit within the requested thumbnail size).
 
-    ``autocrop``
+``autocrop``
       Remove any unnecessary whitespace from the edges of the source image.
       This occurs before the crop or propotional resize.
 
-    ``bw``
+``bw``
       Make the thumbnail grayscale (not really just black & white).
 
-    ``upscale``
+``upscale``
       Allow upscaling of the source image during scaling.
 
-    ``sharpen``
+``sharpen``
       Sharpen the thumbnail image (using the PIL sharpen filter)
 
-    ``detail``
+``detail``
       Add detail to the image, like a mild ``sharpen`` (using the PIL detail
       filter)
 
@@ -91,26 +92,26 @@ When ``as [variable]`` is used, the tag does not return the absolute url of the
 thumbnail. The variable (containing the ``DjangoThumbnail`` object) has the
 following useful methods and properties:
 
-    ``absolute_url``
+``absolute_url``
       The absolute url of the thumbnail (the ``__unicode__`` method of this
       object also returns the absolute url, so you can also just do
       ``{{ thumbnail_variable }}``).
 
-    ``relative_url``
+``relative_url``
       The relative url (to MEDIA_URL) of the thumbnail.
 
-    ``width`` and ``height``
+``width`` and ``height``
       The width/height of the thumbnail image.
 
-    ``filesize``
+``filesize``
       The file size (in bytes) of the thumbnail.
       To output user-friendly file sizes, use the included `filesize filter`_
       (or Django's built-in more simplistic ``filesizeformat`` filter).
 
-    ``source_width`` and ``source_height``
+``source_width`` and ``source_height``
       The width/height of the source image.
 
-    ``source_filesize``
+``source_filesize``
       The file size of the source. Has same methods as ``filesize``.
 
 
@@ -169,14 +170,14 @@ By default, thumbnails are saved in the same directory as the source image.
 You can override this behaviour by adding one or more of the following
 properties to your settings module:
 
-    ``THUMBNAIL_BASEDIR``
+``THUMBNAIL_BASEDIR``
       Save thumbnail images to a directory directly off ``MEDIA_ROOT``,
       still keeping the relative directory structure of the source image.
 
-    ``THUMBNAIL_SUBDIR``
+``THUMBNAIL_SUBDIR``
       Save thumbnail images to a sub-directory relative to the source image.
 
-    ``THUMBNAIL_PREFIX``
+``THUMBNAIL_PREFIX``
       Prepend thumnail filenames with the specified prefix.
 
 For example, if the tag was ``{% thumbnail "photos/1.jpg" 150x150 %}`` then
@@ -246,6 +247,65 @@ The auto1024 and auto1000 formats return a string, appending the correct unit to
 the value. All other formats return the floating point value.
 
 
+Thumbnail Processors
+====================
+
+By specifying a list of ``THUMBNAIL_PROCESSORS`` in your settings module, you
+can change (or add to) the processors which are run when you create a
+thumbnail. Note that the order of the processors is the order in which they
+are called to process the image.
+
+For example, to add your own processor to the list of possible, you would
+create a processor like this::
+
+    def your_processor(image, requested_size, opts):
+        if 'your_option' in opts:
+            process_image(image)
+    your_processor.valid_options = ['your_option']
+
+And add the following to your settings module::
+
+    THUMBNAIL_PROCESSORS = (
+        # Default processors
+        'sorl.thumbnail.processors.colorspace',
+        'sorl.thumbnail.processors.autocrop',
+        'sorl.thumbnail.processors.scale_and_crop',
+        'sorl.thumbnail.processors.filters',
+        # Custom processors
+        'your_project.thumbnail_processors.your_processor',
+    )
+
+Default processors
+------------------
+
+``colorspace``
+    This processor is best kept at the top of the list since it will convert
+    the image to RGB color space needed by most of following processors. It is
+    also responsible for converting an image to grayscale if ``bw``option is
+    specified.
+
+``autocrop``
+    This will crop the image of white edges and is still pretty experimental.
+
+``scale_and_crop``
+    This will correctly scale and crop your image as indicated.
+
+``filters``
+    This provides the ``sharpen`` and ``detail`` options described in the
+    options section
+
+Writing a custom processor
+--------------------------
+
+A custom processor takes exactly three arguments: The image as a PIL Image
+Instance, the requested size as a tuple (width, hight), options as strings
+in a list. Your custom processor should return the processed PIL Image instance.
+To make sure we provide our tag with valid options and to make those available
+to your custom processors you have to attach a list of valid options. This is
+simply done by attaching a list called valid_options to your processor as
+described in the above example.
+
+
 Advanced usage
 ==============
 
@@ -261,3 +321,24 @@ method.
 
 Use the ``Thumbnail`` class in ``sorl.thumbnail.base`` for more low-level
 creation of thumbnails. This class doesn't have any Django-specific ties.
+
+Clean-up script ``bin/thumbnail_cleanup.py``
+--------------------------------------------
+
+This script is used to delete thumbnails that no longer have an original file.
+
+How it works
+~~~~~~~~~~~~
+
+1. It will look through all your models and find ImageFields, then from the
+   upload_to argument to that it will find all thumbnails.
+2. If then in turn the thumbnail exists but not the original file, it will
+   delete the thumbnail.
+
+Limitations
+~~~~~~~~~~~
+
+- It will not even try to delete thumbnails in date formatted directories.
+- There can occur name collisions if a file name matches that of a potential
+  thumbnail (THUMB_RE).
+

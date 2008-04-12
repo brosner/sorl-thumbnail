@@ -6,8 +6,9 @@ from django.utils.functional import curry
 from django.utils.html import escape
 from django.conf import settings
 
-from main import DjangoThumbnail
-#from utils import delete_thumbnails  (TODO:)
+from sorl.thumbnail.main import DjangoThumbnail
+#from sorl.thumbnail.utils import delete_thumbnails  (TODO:)
+
 
 REQUIRED_ARGS = ('size',)
 ALL_ARGS = {
@@ -18,6 +19,7 @@ ALL_ARGS = {
     'subdir': 'subdir',
     'prefix': 'prefix',
 }
+
 
 class ImageWithThumbnailsField(ImageField):
     """

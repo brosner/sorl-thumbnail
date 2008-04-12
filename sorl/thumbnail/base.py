@@ -1,15 +1,13 @@
 import os
-from os import makedirs
 from os.path import isfile, isdir, getmtime, dirname, splitext, getsize
-from shutil import copyfile
-from PIL import Image, ImageFilter
-from methods import autocrop, resize_and_crop
-from subprocess import Popen, PIPE
 from tempfile import mkstemp
+from shutil import copyfile
+from subprocess import Popen, PIPE
 
+from PIL import Image, ImageFilter
 
-# Valid options for the Thumbnail class.
-VALID_OPTIONS = ['crop', 'autocrop', 'upscale', 'bw', 'detail', 'sharpen']
+from sorl.thumbnail import defaults
+from sorl.thumbnail.processors import get_valid_options, dynamic_import
 
 
 class ThumbnailException(Exception):
@@ -18,15 +16,15 @@ class ThumbnailException(Exception):
 
 class Thumbnail(object):
     def __init__(self, source, requested_size, opts=None, quality=85,
-                 dest=None, imagemagick_path='/usr/bin/convert',
-                 wvps_path='/usr/bin/wvPS'):
-        # Converter paths
-        self.imagemagick_path = imagemagick_path
+                 dest=None, convert_path=defaults.CONVERT,
+                 wvps_path=defaults.WVPS, processors=None):
+        # Paths to external commands
+        self.convert_path = convert_path
         self.wvps_path = wvps_path
         # Absolute paths to files
         self.source = source
         self.dest = dest
-
+        
         # Thumbnail settings
         self.requested_size = requested_size
         if not 0 < quality <= 100:
@@ -34,22 +32,20 @@ class Thumbnail(object):
                             'argument: %s' % quality)
         self.quality = quality
 
+        # Processors
+        if processors is None:
+            processors = dynamic_import(defaults.PROCESSORS)
+        self.processors = processors
+
         # Set Thumbnail opt(ion)s
+        VALID_OPTIONS = get_valid_options(processors)
         opts = opts or []
-        # First we check that all options received are valid
+        # Check that all options received are valid
         for opt in opts:
             if not opt in VALID_OPTIONS:
                 raise TypeError('Thumbnail received an invalid option: %s'
                                 % opt)
-        # Then we populate the opts dict and the (sorted) opts list
-        self.opts = {}
-        self.opts_list = []
-        for opt in VALID_OPTIONS:
-            if opt in opts:
-                self.opts[opt] = True
-                self.opts_list.append(opt) # cheap sorted list with options
-            else:
-                self.opts[opt] = False
+        self.opts = [opt for opt in VALID_OPTIONS if opt in opts]
 
         if self.dest is not None:
             self.generate()
@@ -69,7 +65,7 @@ class Thumbnail(object):
             # Ensure the directory exists
             directory = dirname(self.dest)
             if not isdir(directory):
-                makedirs(directory)
+                os.makedirs(directory)
 
             self._do_generate()
 
@@ -122,7 +118,8 @@ class Thumbnail(object):
     def _get_source_data(self):
         if not hasattr(self, '_source_data'):
             if not self.source_exists:
-                raise ThumbnailException('Source file does not exist')
+                raise ThumbnailException("Source file: '%s' does not exist." %
+                                         self.source)
             if self.source_filetype == 'doc':
                 self._convert_wvps(self.source)
             elif self.source_filetype == 'pdf':
@@ -154,12 +151,12 @@ class Thumbnail(object):
 
     def _convert_imagemagick(self, filename):
         tmp = mkstemp('.png')[1]
-        if self.opts['crop'] or self.opts['autocrop']:
+        if 'crop' in self.opts or 'autocrop' in self.opts:
             x,y = [d*3 for d in self.requested_size]
         else:
             x,y = self.requested_size
         try:
-            p = Popen((self.imagemagick_path, '-size', '%sx%s' % (x,y),
+            p = Popen((self.convert_path, '-size', '%sx%s' % (x,y),
                 '-antialias', '-colorspace', 'rgb', '-format', 'PNG24',
                 '%s[0]' % filename, tmp), stdout=PIPE)
             p.wait()
@@ -178,22 +175,8 @@ class Thumbnail(object):
         """
         im = self.source_data
 
-        if self.opts['bw'] and im.mode != "L":
-            im = im.convert("L")
-        elif im.mode not in ("L", "RGB"):
-            im = im.convert("RGB")
-
-        if self.opts['autocrop']:
-            im = autocrop(im)
-
-        im = resize_and_crop(im, self.requested_size, self.opts['upscale'],
-                             self.opts['crop'])
-
-        if self.opts['detail']:
-            im = im.filter(ImageFilter.DETAIL)
-
-        if self.opts['sharpen']:
-            im = im.filter(ImageFilter.SHARPEN)
+        for processor in self.processors:
+            im = processor(im, self.requested_size, self.opts)
 
         self.data = im
 

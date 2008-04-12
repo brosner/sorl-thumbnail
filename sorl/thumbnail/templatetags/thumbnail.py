@@ -2,9 +2,8 @@ import re
 import math
 from django.template import Library, Node, Variable, VariableDoesNotExist, TemplateSyntaxError
 from django.conf import settings
-from sorl.thumbnail.base import VALID_OPTIONS
-from sorl.thumbnail.main import DjangoThumbnail
-from sorl.thumbnail.utils import get_thumbnail_setting
+from sorl.thumbnail.main import DjangoThumbnail, get_thumbnail_setting
+from sorl.thumbnail.processors import dynamic_import, get_valid_options
 
 register = Library()
 
@@ -16,6 +15,16 @@ filesize_long_formats = {
     'k': 'kilo', 'M': 'mega', 'G': 'giga', 'T': 'tera', 'P': 'peta',
     'E': 'exa', 'Z': 'zetta', 'Y': 'yotta'
 }
+
+try:
+    PROCESSORS = dynamic_import(get_thumbnail_setting('PROCESSORS'))
+    VALID_OPTIONS = get_valid_options(PROCESSORS)
+except:
+    if get_thumbnail_setting('DEBUG'):
+        raise
+    else:
+        PROCESSORS = []
+        VALID_OPTIONS = []
 
 
 class ThumbnailNode(Node):
@@ -33,6 +42,8 @@ class ThumbnailNode(Node):
         self.kwargs = kwargs
 
     def render(self, context):
+        # Note that this isn't a global constant because we need to change the
+        # value for tests.
         DEBUG = get_thumbnail_setting('DEBUG')
         # Resolve source variable
         try:
@@ -65,7 +76,8 @@ class ThumbnailNode(Node):
         # Get thumbnail instance
         try:
             thumbnail = DjangoThumbnail(relative_source, self.requested_size,
-                                        opts=self.opts, **self.kwargs)
+                                        opts=self.opts, processors=PROCESSORS,
+                                        **self.kwargs)
         except:
             if DEBUG:
                 raise
@@ -124,6 +136,7 @@ def thumbnail(parser, token):
     # Check the options.
     opts = []
     kwargs = {} # key,values here override settings and defaults
+
     for arg in args_list:
         if arg in VALID_OPTIONS:
             opts.append(arg)

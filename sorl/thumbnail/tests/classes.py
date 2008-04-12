@@ -1,11 +1,18 @@
 import unittest
 import os
 import time
+
 from PIL import Image
 from django.conf import settings
-from sorl.thumbnail.base import Thumbnail, VALID_OPTIONS 
-from sorl.thumbnail.main import DjangoThumbnail
+
+from sorl.thumbnail.base import Thumbnail
+from sorl.thumbnail.main import DjangoThumbnail, get_thumbnail_setting
+from sorl.thumbnail.processors import dynamic_import, get_valid_options
 from sorl.thumbnail.tests.base import BaseTest, RELATIVE_PIC_NAME, PIC_NAME, THUMB_NAME, PIC_SIZE
+
+
+PROCESSORS = dynamic_import(get_thumbnail_setting('PROCESSORS'))
+VALID_OPTIONS = get_valid_options(PROCESSORS)
 
 
 class ThumbnailTest(BaseTest):
@@ -39,7 +46,7 @@ class ThumbnailTest(BaseTest):
         thumb = Thumbnail(source=PIC_NAME, dest=thumb_name,
                           requested_size=thumb_size)
         self.assertEqual(os.path.getmtime(thumb_name), thumb_mtime)
-        
+
         # Recreate the source image, then see if a new thumb is generated
         Image.new('RGB', PIC_SIZE).save(PIC_NAME, 'JPEG')
         thumb = Thumbnail(source=PIC_NAME, dest=thumb_name,
@@ -82,7 +89,7 @@ class DjangoThumbnailTest(BaseTest):
         thumb = DjangoThumbnail(relative_source=RELATIVE_PIC_NAME,
                                 requested_size=(240, 120), opts=VALID_OPTIONS)
         expected = os.path.join(settings.MEDIA_ROOT, basename)
-        expected += '_240x120_crop_autocrop_upscale_bw_detail_sharpen_q85.jpg'
+        expected += '_240x120_bw_autocrop_crop_upscale_detail_sharpen_q85.jpg'
         self.verify_thumbnail((240, 120), thumb, expected_filename=expected)
 
         # Different basedir
@@ -112,5 +119,7 @@ class DjangoThumbnailTest(BaseTest):
 
     def tearDown(self):
         super(DjangoThumbnailTest, self).tearDown()
-        os.rmdir(os.path.join(self.sub_dir, 'subdir'))
+        subdir = os.path.join(self.sub_dir, 'subdir')
+        if os.path.exists(subdir):
+            os.rmdir(subdir)
         os.rmdir(self.sub_dir)

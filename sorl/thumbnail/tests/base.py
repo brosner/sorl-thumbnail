@@ -2,23 +2,33 @@ import unittest
 import os
 from PIL import Image
 from django.conf import settings
-from sorl.thumbnail.base import Thumbnail 
-from sorl.thumbnail.utils import DEFAULT_THUMBNAIL_SETTINGS
+from sorl.thumbnail.base import Thumbnail
 
 try:
     set
 except NameError:
     from sets import Set as set     # For Python 2.3
 
+def get_default_settings():
+    from sorl.thumbnail import defaults
+    def_settings = {}
+    settings = dir(defaults)[0:-4]
+    for key in settings:
+        def_settings[key] = getattr(defaults, key)
+    return def_settings
+
+
+DEFAULT_THUMBNAIL_SETTINGS = get_default_settings()
 RELATIVE_PIC_NAME = "sorl-thumbnail-test_source.jpg"
 PIC_NAME = os.path.join(settings.MEDIA_ROOT, RELATIVE_PIC_NAME)
 THUMB_NAME = os.path.join(settings.MEDIA_ROOT, "sorl-thumbnail-test_%02d.jpg")
 PIC_SIZE = (800, 600)
 
 
+
 class ChangeSettings:
     def __init__(self):
-        self.default_settings = DEFAULT_THUMBNAIL_SETTINGS.copy() 
+        self.default_settings = DEFAULT_THUMBNAIL_SETTINGS.copy()
 
     def change(self, override=None):
         if override is not None:
@@ -31,7 +41,7 @@ class ChangeSettings:
             if hasattr(settings, settings_s) or \
                default != DEFAULT_THUMBNAIL_SETTINGS[setting]:
                 setattr(settings, settings_s, default)
-    
+
     def revert(self):
         for setting in self.default_settings:
             settings_s = 'THUMBNAIL_%s' % setting
